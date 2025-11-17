@@ -3,23 +3,43 @@ import bcrypt from "bcrypt";
 import { User } from "../models/user.model";
 import * as userRepo from "../repositories/user.repository";
 
-//CREATE
-export async function createUserService(data: User) {
-  // Hashear la contraseña antes de guardar
+/**
+ * Creates a new user using the repository layer.
+ *
+ * The password is hashed before storing the user data in the database.
+ *
+ * @param {User} data - The user data received from the controller.
+ * @returns {Promise<string>} The ID of the newly created user in Firestore.
+ */
+export async function createUserService(data: User): Promise<string> {
   const hashedPassword = await bcrypt.hash(data.password, 10);
   const userToSave: User = { ...data, password: hashedPassword };
 
   return await userRepo.createUserInDb(userToSave);
 }
 
-//READ ALL
-export async function getUsersService() {
+/**
+ * Retrieves all users from the database.
+ *
+ * @returns {Promise<Array<object>>} An array of user objects.
+ */
+export async function getUsersService(): Promise<Array<object>> {
   return await userRepo.getAllUsersFromDb();
 }
 
-//UPDATE
-export async function updateUserService(id: string, data: Partial<User>) {
-  // Si viene contraseña, la hasheamos
+/**
+ * Updates an existing user.
+ *
+ * If the updated data contains a password, it is hashed before saving.
+ *
+ * @param {string} id - The ID of the user to update.
+ * @param {Partial<User>} data - The fields that should be updated.
+ * @returns {Promise<void>}
+ */
+export async function updateUserService(
+  id: string,
+  data: Partial<User>
+): Promise<void> {
   if (data.password) {
     data.password = await bcrypt.hash(data.password, 10);
   }
@@ -27,12 +47,24 @@ export async function updateUserService(id: string, data: Partial<User>) {
   await userRepo.updateUserInDb(id, data);
 }
 
-//DELETE
-export async function deleteUserService(id: string) {
+/**
+ * Deletes a user from the database.
+ *
+ * @param {string} id - The ID of the user to delete.
+ * @returns {Promise<void>}
+ */
+export async function deleteUserService(id: string): Promise<void> {
   await userRepo.deleteUserInDb(id);
 }
 
-//FIND BY EMAIL
-export async function findUserByEmailService(email: string) {
+/**
+ * Finds a user by their email address.
+ *
+ * @param {string} email - The email to search for.
+ * @returns {Promise<object | null>} The found user or null if not found.
+ */
+export async function findUserByEmailService(
+  email: string
+): Promise<object | null> {
   return await userRepo.findUserByEmailInDb(email);
 }

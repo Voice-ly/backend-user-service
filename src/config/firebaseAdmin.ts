@@ -1,5 +1,16 @@
 import admin from "firebase-admin";
 
+/**
+ * Initializes the Firebase Admin SDK if it has not been initialized yet.
+ *
+ * This block ensures that the Firebase Admin app is created only once.
+ * It uses environment variables to load the Firebase service account
+ * credentials securely.
+ *
+ * The private key is formatted to replace escaped newline characters
+ * with actual newline characters to meet Firebase's expected format.
+ */
+
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
