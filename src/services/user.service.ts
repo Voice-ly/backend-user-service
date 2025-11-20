@@ -77,3 +77,8 @@ export async function findUserByTokenService(
 ): Promise<User | null> {
   return await userRepo.findUserByResetToken(token);
 }
+
+export function sanitizeUser(user: User) {
+  const { password, resetPasswordToken, ...rest } = user;
+  return rest;
+}

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 import { User } from "../models/user.model";
@@ -11,6 +11,7 @@ import {
   findUserByEmailService,
   findUserByTokenService,
   findUserByIdService,
+  sanitizeUser,
 } from "../services/user.service";
 import { sendPasswordResetEmail } from "../utils/email";
 
@@ -98,7 +99,7 @@ export const getUsers = async (req: Request, res: Response) => {
 
     if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
-    return res.json(user);
+    return res.json(sanitizeUser(user));
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }
@@ -131,7 +132,28 @@ export const updateUser = async (req: Request, res: Response) => {
 
     // Actualizar cualquier campo permitido
     for (const field of allowedFields) {
-      if (data[field] !== undefined) updateData[field] = data[field];
+      if (data[field] !== undefined && data[field] !== "") {
+        updateData[field] = data[field];
+      }
+    }
+
+    // Validaciones
+    if (updateData.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(updateData.email)) {
+        throw { status: 400, message: "Email inválido" };
+      }
+    }
+
+    if (updateData.password) {
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_]).{8,}$/;
+      if (!passwordRegex.test(updateData.password)) {
+        throw {
+          status: 400,
+          message:
+            "La contraseña debe tener 8 caracteres, mayúscula, minúscula y un caracter especial",
+        };
+      }
     }
 
     await updateUserService(userId, updateData);
