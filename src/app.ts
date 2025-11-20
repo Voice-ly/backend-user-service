@@ -18,10 +18,26 @@ import { errorHandler } from "./middlewares/errorHandler";
 
 const app = express();
 
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5000',
+// para que no sobrescriba SameSite
+app.set("trust proxy", 1);
+
+/**
+ * Parse allowed origins from ALLOWED_ORIGINS environment variable.
+ * Defaults to localhost:3000 and localhost:5000 if not set.
+ *
+ * @constant {string[]}
+ */
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5000")
+    .split(",")
+    .map(origin => origin.trim());
+
+app.use(
+  cors({
+    origin: allowedOrigins,
     credentials: true,
-}));
+  })
+);
+
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(cookieParser());
