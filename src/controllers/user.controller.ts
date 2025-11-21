@@ -97,7 +97,7 @@ export const getUsers = async (req: Request, res: Response) => {
 
     const email: any = req.user.email;
     const user: any = (await findUserByEmailService(email)) as UserWithId | null;
-    
+
 
     if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
     console.log(user);
@@ -358,7 +358,7 @@ export const resetPassword = async (req: Request, res: Response) => {
   try {
     const tokenRaw = req.query.token;
     console.log(tokenRaw);
-    
+
     const { password } = req.body;
     const tokenStr = typeof tokenRaw === "string" ? tokenRaw : Array.isArray(tokenRaw) ? tokenRaw[0] : undefined;
     if (!tokenStr) return res.status(400).json({ message: "Token requerido" });
@@ -397,19 +397,13 @@ export const socialAuthController = async (req: Request, res: Response) => {
     const decodedUser = await admin.auth().verifyIdToken(idToken);
     const email: any = decodedUser.email;
 
-    if (!email) {
-      return res.status(400).json({ message: "Email no proporcionado por el proveedor" });
-    }
-
     let user: any = (await findUserByEmailService(email)) as UserWithId | null;
 
     if (!user) {
       user = {
         firstName: decodedUser.name || "Sin Nombre",
-        lastName: "",
-        age: null,
-        email,
-        password: null, // NO crear contraseña random
+        email: email || "",
+        password: crypto.randomBytes(16).toString("hex"),
         createdAt: new Date(),
       };
 
@@ -437,16 +431,11 @@ export const socialAuthController = async (req: Request, res: Response) => {
       expiresIn: expiresEnv,
     });
 
-    // MISMA LÓGICA QUE loginUser
-    const isProduction =
-      process.env.NODE_ENV === "production" ||
-      req.secure ||
-      req.headers["x-forwarded-proto"] === "https";
-
+    // Guardamos el token en cookie HTTP-only
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction,                // HTTPS solo cuando debe
-      sameSite: isProduction ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: cookieMaxAge,
     });
 
