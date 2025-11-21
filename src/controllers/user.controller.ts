@@ -4,6 +4,7 @@
  * Exposes HTTP handlers for user management and authentication flows.
  * Controllers are thin and delegate business rules to services.
  */
+import admin from "firebase-admin";
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
@@ -91,17 +92,18 @@ export const createUser = async (req: Request, res: Response) => {
  */
 export const getUsers = async (req: Request, res: Response) => {
   try {
-    
+
     if (!req.user) return res.status(402).json({ message: "Token inválido" });
 
-    const userId = req.user.uid;
-    const user = await findUserByIdService(userId); // Servicio que devuelve un usuario por ID
+    const email: any = req.user.email;
+    const user: any = (await findUserByEmailService(email)) as UserWithId | null;
+    
 
     if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
-        console.log(user);
+    console.log(user);
 
     return res.json(sanitizeUser(user));
-    
+
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }
@@ -121,7 +123,9 @@ export const updateUser = async (req: Request, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Token inválido" });
 
-    const userId = req.user.uid;
+
+    const email: any = req.user.email;
+    const user: any = (await findUserByEmailService(email)) as UserWithId | null;
     const data = req.body;
 
     const allowedFields: (keyof User)[] = ["firstName", "lastName", "age", "email", "password"];
@@ -153,7 +157,7 @@ export const updateUser = async (req: Request, res: Response) => {
       }
     }
 
-    await updateUserService(userId, updateData);
+    await updateUserService(user.id, updateData);
 
     return res.json({ message: "Usuario actualizado" });
   } catch (error: any) {
@@ -177,18 +181,16 @@ export const deleteUser = async (req: Request, res: Response) => {
 
     const password = req.body.password;
     if (!password) return res.status(400).json({ message: "Contraseña requerida para eliminar cuenta" });
-    
+
     const email: string = req.user.email || "";
-    const user:any = (await findUserByEmailService(email)) as UserWithId | null;
-    console.log(user);
-    
-    const userId = req.user.uid; // Usamos el UID del token
+    const user: any = (await findUserByEmailService(email)) as UserWithId | null;
+
     const match = await bcrypt.compare(password, user?.password);
     if (!match) return res.status(401).json({ message: "Contraseña incorrecta" });
 
 
-    await deleteUserService(userId);
-    
+    await deleteUserService(user.id);
+
 
     return res.json({ message: "Usuario eliminado correctamente" });
   } catch (error: any) {
@@ -245,7 +247,7 @@ export const loginUser = async (req: Request, res: Response) => {
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: cookieMaxAge,
     });
-    
+
 
     return res.json({ message: "Login exitoso" });
   } catch (error: any) {
@@ -303,12 +305,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
     if (!email) return res.status(400).json({ message: "Email is required" });
 
     // 2. Buscar usuario en tu DB
-    const user:any = await findUserByEmailService(email);
+    const user: any = await findUserByEmailService(email);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // 3. Generar token único
     const resetToken = crypto.randomBytes(32).toString("hex");
-    
+
     // 4. Guardar token y expiración en la DB
     await updateUserService(user.id, {
       resetPasswordToken: resetToken,
@@ -351,9 +353,11 @@ export const forgotPassword = async (req: Request, res: Response) => {
  * 5. Update the user's password and clear the token from the database.
  * 6. Respond with a success message or an error.
  */
-export const resetPassword = async (req: Request, res: Response) =>  {
+export const resetPassword = async (req: Request, res: Response) => {
   try {
     const tokenRaw = req.query.token;
+    console.log(tokenRaw);
+    
     const { password } = req.body;
     const tokenStr = typeof tokenRaw === "string" ? tokenRaw : Array.isArray(tokenRaw) ? tokenRaw[0] : undefined;
     if (!tokenStr) return res.status(400).json({ message: "Token requerido" });
@@ -383,3 +387,61 @@ export const resetPassword = async (req: Request, res: Response) =>  {
     return res.status(500).json({ error: "Error al restablecer la contraseña" });
   }
 }
+
+export const socialAuthController = async (req: Request, res: Response) => {
+  try {
+    const { idToken } = req.body;
+
+    // Firebase Admin verifica el token independientemente del proveedor (Google, Facebook, GitHub, etc.)
+    const decodedUser = await admin.auth().verifyIdToken(idToken);
+    const email: any = decodedUser.email;
+    let user: any = (await findUserByEmailService(email)) as UserWithId | null;
+
+    if (!user) {
+
+      user = {
+        firstName: decodedUser.name || "Sin Nombre",
+        email: email || "",
+        password: crypto.randomBytes(16).toString("hex"),
+        createdAt: new Date(),
+      };
+
+      await createUserService(user);
+    }
+
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ message: "JWT_SECRET no está configurado" });
+
+    const expiresEnv = process.env.JWT_EXPIRES_IN || "1h"; // puede ser '3600' (segundos), '1h', '30m', etc.
+    let cookieMaxAge = 60 * 60 * 1000; // default 1h en ms
+
+    if (/^\d+$/.test(expiresEnv)) {
+      // valor en segundos
+      cookieMaxAge = Number(expiresEnv) * 1000;
+    } else if (/^\d+h$/i.test(expiresEnv)) {
+      cookieMaxAge = Number(expiresEnv.replace(/h/i, "")) * 60 * 60 * 1000;
+    } else if (/^\d+m$/i.test(expiresEnv)) {
+      cookieMaxAge = Number(expiresEnv.replace(/m/i, "")) * 60 * 1000;
+    }
+
+    // Crear token JWT (jsonwebtoken acepta string|number para expiresIn)
+    const token = (jwt as any).sign({ uid: user.id, email: user.email }, secret as any, {
+      expiresIn: expiresEnv,
+    });
+
+    // Guardamos el token en cookie HTTP-only
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: cookieMaxAge,
+    });
+
+
+    return res.json({ message: "Login exitoso" });
+  } catch (err) {
+    console.error(err);
+    res.status(401).json({ message: "Token inválido" });
+  }
+};
