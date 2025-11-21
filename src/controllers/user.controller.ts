@@ -91,14 +91,17 @@ export const createUser = async (req: Request, res: Response) => {
  */
 export const getUsers = async (req: Request, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Token inválido" });
+    
+    if (!req.user) return res.status(402).json({ message: "Token inválido" });
 
     const userId = req.user.uid;
     const user = await findUserByIdService(userId); // Servicio que devuelve un usuario por ID
 
     if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+        console.log(user);
 
     return res.json(sanitizeUser(user));
+    
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }
@@ -172,8 +175,20 @@ export const deleteUser = async (req: Request, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Token inválido" });
 
+    const password = req.body.password;
+    if (!password) return res.status(400).json({ message: "Contraseña requerida para eliminar cuenta" });
+    
+    const email: string = req.user.email || "";
+    const user:any = (await findUserByEmailService(email)) as UserWithId | null;
+    console.log(user);
+    
     const userId = req.user.uid; // Usamos el UID del token
+    const match = await bcrypt.compare(password, user?.password);
+    if (!match) return res.status(401).json({ message: "Contraseña incorrecta" });
+
+
     await deleteUserService(userId);
+    
 
     return res.json({ message: "Usuario eliminado correctamente" });
   } catch (error: any) {
