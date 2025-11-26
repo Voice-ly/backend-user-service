@@ -10,7 +10,7 @@ import {
 
 export const createMeetingController = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.uid;
 
     if (!userId) {
       return res.status(401).json({
@@ -81,7 +81,7 @@ export const listMeetingsController = async (_req: Request, res: Response) => {
 export const joinMeetingController = async (req: Request, res: Response) => {
   try {
     const meetingId = req.params.id;
-    const userId = req.user?.id; // Asegúrate de tener el middleware que inserta esto
+    const userId = req.user?.uid; // Asegúrate de tener el middleware que inserta esto
 
     if (!userId) {
       return res.status(401).json({
@@ -106,7 +106,7 @@ export const joinMeetingController = async (req: Request, res: Response) => {
 export const updateMeetingController = async (req: Request, res: Response) => {
   try {
     const meetingId = req.params.id;
-    const userId = req.user?.id;
+    const userId = req.user?.uid;
     const data = req.body;
 
     if (!userId) {
@@ -132,7 +132,7 @@ export const updateMeetingController = async (req: Request, res: Response) => {
 export const deleteMeetingController = async (req: Request, res: Response) => {
   try {
     const meetingId = req.params.id;
-    const userId = req.user?.id;
+    const userId = req.user?.uid;
 
     if (!userId) {
       return res.status(401).json({
